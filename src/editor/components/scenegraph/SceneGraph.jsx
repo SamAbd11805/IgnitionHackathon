@@ -524,7 +524,7 @@ export default class SceneGraph extends React.Component {
                       onClick: () => this.setActiveTab('gallery')
                     },
                     {
-                      label: '🔫 Crime',
+                      label: 'Crime',
                       value: 'crimesim',
                       isSelected: this.state.activeTab === 'crimesim',
                       onClick: () => this.setActiveTab('crimesim')

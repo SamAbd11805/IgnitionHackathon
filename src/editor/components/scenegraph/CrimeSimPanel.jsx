@@ -134,16 +134,14 @@ export default function CrimeSimPanel() {
 
   // ── stop simulation ───────────────────────────────────────────────────────
   const stopSim = useCallback(() => {
-    const el = document.getElementById(SIM_ENTITY_ID);
-    if (el) {
-      const comp = el.components && el.components['city-simulation'];
-      if (comp) {
-        [...comp.citizens, ...comp.police].forEach((a) => {
-          if (a.el && a.el.parentNode) {
-            a.el.parentNode.removeChild(a.el);
-          }
-        });
+    // Remove every entity tagged by the simulation (city + agents + VFX)
+    document.querySelectorAll('.crime-sim-spawned').forEach((el) => {
+      if (el.parentNode) {
+        el.parentNode.removeChild(el);
       }
+    });
+    const el = document.getElementById(SIM_ENTITY_ID);
+    if (el && el.parentNode) {
       el.parentNode.removeChild(el);
     }
     setRunning(false);
