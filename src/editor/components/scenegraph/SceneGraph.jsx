@@ -11,6 +11,7 @@ import { createUniqueId, getEntityDisplayName } from '../../lib/entity';
 import posthog from 'posthog-js';
 import GalleryPanel from './GalleryPanel';
 import CrimeSimPanel from './CrimeSimPanel';
+import MayorChatPanel from './MayorChatPanel';
 import GeoSidebar from '../elements/GeoSidebar';
 import AppMenu from './AppMenu';
 import { AppSwitcher } from '@shared/navigation/components';
@@ -528,6 +529,12 @@ export default class SceneGraph extends React.Component {
                       value: 'crimesim',
                       isSelected: this.state.activeTab === 'crimesim',
                       onClick: () => this.setActiveTab('crimesim')
+                    },
+                    {
+                      label: 'AI',
+                      value: 'mayor',
+                      isSelected: this.state.activeTab === 'mayor',
+                      onClick: () => this.setActiveTab('mayor')
                     }
                   ]}
                 />
@@ -564,6 +571,7 @@ export default class SceneGraph extends React.Component {
               )}
               {this.state.activeTab === 'gallery' && <GalleryPanel />}
               {this.state.activeTab === 'crimesim' && <CrimeSimPanel />}
+              {this.state.activeTab === 'mayor' && <MayorChatPanel />}
               {this.state.activeTab === 'geo' && (
                 <div className="left-panel-geo-content">
                   <GeoSidebar entity={this.getEntityById('reference-layers')} />
