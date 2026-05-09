@@ -186,7 +186,8 @@ const GeoModal = () => {
 
     // Use the shared utility function to set the scene location
     const result = await setSceneLocation(latitude, longitude, {
-      fromGeojsonImport: wasOpenedFromGeojson
+      fromGeojsonImport:
+        wasOpenedFromGeojson || process.env.NODE_ENV === 'development'
     });
 
     if (result.success && result.data) {

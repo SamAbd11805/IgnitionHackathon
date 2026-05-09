@@ -58,6 +58,8 @@ export const checkAndRefillProTokens = async () => {
 export const canUseGeoFeature = async (user) => {
   if (!user) return false;
 
+  if (process.env.NODE_ENV === 'development') return true;
+
   // Check if user is pro - use isPro property from context if available, otherwise use isUserPro
   if (user.isPro !== undefined) {
     // User from auth context with isPro property
