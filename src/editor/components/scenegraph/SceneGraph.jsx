@@ -10,6 +10,7 @@ import { Plus20Circle } from '@shared/icons';
 import { createUniqueId, getEntityDisplayName } from '../../lib/entity';
 import posthog from 'posthog-js';
 import GalleryPanel from './GalleryPanel';
+import CrimeSimPanel from './CrimeSimPanel';
 import GeoSidebar from '../elements/GeoSidebar';
 import AppMenu from './AppMenu';
 import { AppSwitcher } from '@shared/navigation/components';
@@ -521,6 +522,12 @@ export default class SceneGraph extends React.Component {
                       value: 'gallery',
                       isSelected: this.state.activeTab === 'gallery',
                       onClick: () => this.setActiveTab('gallery')
+                    },
+                    {
+                      label: '🔫 Crime',
+                      value: 'crimesim',
+                      isSelected: this.state.activeTab === 'crimesim',
+                      onClick: () => this.setActiveTab('crimesim')
                     }
                   ]}
                 />
@@ -556,6 +563,7 @@ export default class SceneGraph extends React.Component {
                 </div>
               )}
               {this.state.activeTab === 'gallery' && <GalleryPanel />}
+              {this.state.activeTab === 'crimesim' && <CrimeSimPanel />}
               {this.state.activeTab === 'geo' && (
                 <div className="left-panel-geo-content">
                   <GeoSidebar entity={this.getEntityById('reference-layers')} />

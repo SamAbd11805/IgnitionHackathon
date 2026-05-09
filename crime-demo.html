@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>City Crime Simulation — 3DStreet</title>
+
+  <!--
+    A-Frame (exact commit used by 3DStreet index.html for Three r181 compat)
+    The 3DStreet bundle (/dist/aframe-street-component.js) loads afterward
+    and registers all components + asset mixins (a_char1…a_char8, sedan-rig…)
+  -->
+  <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe@6a054e85953bbcc71854bcd64f9abde0897be649/dist/aframe-master.min.js"></script>
+  <!-- crime-sim.js = street components + assets + city-simulation, WITHOUT the React editor -->
+  <script src="/dist/crime-sim.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { overflow: hidden; background: #0a0e1a; font-family: 'Courier New', monospace; }
+
+    /* ── HUD ─────────────────────────────────────────────────────────── */
+    #hud {
+      position: fixed; top: 16px; left: 16px; z-index: 999;
+      background: rgba(6, 9, 20, 0.82);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(80, 140, 255, 0.3);
+      border-radius: 10px;
+      padding: 16px 20px;
+      color: #c8deff;
+      min-width: 240px;
+      box-shadow: 0 4px 28px rgba(0,0,0,0.6);
+    }
+    #hud h2 {
+      font-size: 13px; letter-spacing: 2px; color: #6af;
+      margin-bottom: 14px; text-transform: uppercase;
+    }
+    .stat {
+      display: flex; justify-content: space-between; align-items: center;
+      margin: 7px 0; font-size: 13px;
+    }
+    .stat-label { color: #7a9acc; }
+    .stat-value { font-size: 15px; font-weight: bold; color: #fff; }
+    .stat-value.red    { color: #ff5555; }
+    .stat-value.yellow { color: #ffc847; }
+    .stat-value.green  { color: #50fa7b; }
+    .stat-value.blue   { color: #6af; }
+
+    #crime-log {
+      margin-top: 14px;
+      border-top: 1px solid rgba(80,140,255,0.2);
+      padding-top: 10px;
+      max-height: 110px;
+      overflow-y: auto;
+      font-size: 11px;
+      color: #889;
+    }
+    #crime-log .entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    #crime-log .entry.crime   { color: #ff5555; }
+    #crime-log .entry.resolved { color: #50fa7b; }
+
+    /* ── Controls ────────────────────────────────────────────────────── */
+    #controls {
+      position: fixed; bottom: 16px; left: 16px; z-index: 999;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .ctrl-row { display: flex; gap: 8px; align-items: center; }
+    .btn {
+      padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 12px;
+      font-family: 'Courier New', monospace; letter-spacing: 1px;
+      border: 1px solid rgba(80,140,255,0.4);
+      background: rgba(6,9,20,0.85); color: #6af;
+      transition: background 0.2s, color 0.2s;
+    }
+    .btn:hover  { background: rgba(30,60,140,0.9); color: #fff; }
+    .btn.danger { border-color: rgba(255,80,80,0.5); color: #f86; }
+    .btn.danger:hover { background: rgba(120,20,20,0.9); color: #fff; }
+    label.ctrl-label { font-size: 11px; color: #7a9acc; }
+    input[type=range] { width: 100px; accent-color: #6af; }
+
+    /* ── Legend ──────────────────────────────────────────────────────── */
+    #legend {
+      position: fixed; top: 16px; right: 16px; z-index: 999;
+      background: rgba(6,9,20,0.82); backdrop-filter: blur(8px);
+      border: 1px solid rgba(80,140,255,0.3); border-radius: 10px;
+      padding: 14px 18px; color: #c8deff; font-size: 12px;
+      min-width: 170px;
+    }
+    #legend h3 { font-size: 11px; color: #6af; letter-spacing: 2px; margin-bottom: 10px; text-transform: uppercase; }
+    .legend-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Camera hint ────────────────────────────────────────────────── */
+    #cam-hint {
+      position: fixed; bottom: 16px; right: 16px; z-index: 999;
+      background: rgba(6,9,20,0.7); border: 1px solid rgba(80,140,255,0.2);
+      border-radius: 8px; padding: 10px 14px; font-size: 11px; color: #556;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════ HUD ════════════════ -->
+<div id="hud">
+  <h2>🏙 City Crime Monitor</h2>
+  <div class="stat">
+    <span class="stat-label">Homicides</span>
+    <span class="stat-value red"    id="s-total">0</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Resolved</span>
+    <span class="stat-value green"  id="s-resolved">0</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Pending</span>
+    <span class="stat-value yellow" id="s-pending">0</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Avg response</span>
+    <span class="stat-value blue"   id="s-response">—</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Police active</span>
+    <span class="stat-value blue"   id="s-police">3</span>
+  </div>
+  <div id="crime-log"><em style="color:#445">No events yet…</em></div>
+</div>
+
+<!-- ═══════════════ Legend ════════════════ -->
+<div id="legend">
+  <h3>Legend</h3>
+  <div class="legend-row"><div class="dot" style="background:#3ab86a"></div> Citizen (wandering)</div>
+  <div class="legend-row"><div class="dot" style="background:#ff5555"></div> Criminal (fleeing)</div>
+  <div class="legend-row"><div class="dot" style="background:#aaaaaa"></div> Victim (dead)</div>
+  <div class="legend-row"><div class="dot" style="background:#1144ee"></div> Police car</div>
+  <div class="legend-row"><div class="dot" style="background:#ff2200"></div> Crime scene flash</div>
+</div>
+
+<!-- ═══════════════ Controls ════════════════ -->
+<div id="controls">
+  <div class="ctrl-row">
+    <button class="btn" id="btn-pause">⏸ Pause</button>
+    <button class="btn danger" id="btn-crime">🔫 Force crime</button>
+  </div>
+  <div class="ctrl-row">
+    <label class="ctrl-label">Crime rate</label>
+    <input type="range" id="sl-crime" min="0.001" max="0.05" step="0.001" value="0.003">
+    <span id="sl-crime-val" style="font-size:11px;color:#6af">0.003</span>
+  </div>
+  <div class="ctrl-row">
+    <label class="ctrl-label">Police speed</label>
+    <input type="range" id="sl-speed" min="2" max="20" step="1" value="8">
+    <span id="sl-speed-val" style="font-size:11px;color:#6af">8</span>
+  </div>
+</div>
+
+<!-- ═══════════════ Camera hint ════════════════ -->
+<div id="cam-hint">W/A/S/D — pan &nbsp;|&nbsp; Scroll — zoom (TODO)</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     A-FRAME SCENE
+═══════════════════════════════════════════════════════════ -->
+<a-scene
+  id="main-scene"
+  renderer="colorManagement:true; physicallyCorrectLights:true; antialias:true; shadowMapEnabled:true"
+  vr-mode-ui="enabled:false"
+  loading-screen="dotsColor:#6af; backgroundColor:#0a0e1a"
+  fog="type:exponential; color:#b8cce0; density:0.008"
+>
+
+  <!-- ── Assets (loaded by aframe-street-component.js automatically) ── -->
+  <a-assets timeout="30000">
+    <a-asset-item id="house-glb"
+      src="https://assets.3dstreet.app/sets/buildings/gltf-exports/draco/v2-buildings-suburban-SM_Bld_House_Preset_03_1800.glb">
+    </a-asset-item>
+    <a-asset-item id="mixed-glb"
+      src="https://assets.3dstreet.app/sets/buildings/gltf-exports/draco/v2-buildings-SM3D_Bld_Mixed_4fl.glb">
+    </a-asset-item>
+  </a-assets>
+
+  <!-- ── Sky ──────────────────────────────────────────────────── -->
+  <a-sky color="#b8cce0" radius="400"></a-sky>
+
+  <!-- ── Lighting ─────────────────────────────────────────────── -->
+  <a-light type="ambient"     color="#c0d4f0" intensity="0.55"></a-light>
+  <a-light type="directional" color="#fff6e0" intensity="2.0"
+    position="15 30 -10"
+    cast-shadow="true"
+    shadow-camera-near="1" shadow-camera-far="120"
+    shadow-camera-left="-55" shadow-camera-right="55"
+    shadow-camera-top="55"  shadow-camera-bottom="-55"
+    shadow-map-width="2048"  shadow-map-height="2048">
+  </a-light>
+
+  <!-- ── Ground ───────────────────────────────────────────────── -->
+  <a-plane id="ground" rotation="-90 0 0" width="250" height="250"
+    color="#3b6e42" shadow="receive:true" roughness="0.9" metalness="0">
+  </a-plane>
+
+  <!-- ── Roads ────────────────────────────────────────────────── -->
+  <!-- North-South -->
+  <a-plane rotation="-90 0 0" width="9" height="70"
+    position="0 0.01 0" color="#383838" shadow="receive:true">
+  </a-plane>
+  <!-- East-West -->
+  <a-plane rotation="-90 0 0" width="70" height="9"
+    position="0 0.01 0" color="#383838" shadow="receive:true">
+  </a-plane>
+  <!-- Intersection box (slightly darker) -->
+  <a-plane rotation="-90 0 0" width="9" height="9"
+    position="0 0.02 0" color="#2e2e2e">
+  </a-plane>
+
+  <!-- ── Road centre lines (dashed white) ─────────────────────── -->
+  <!-- NS dashes -->
+  <a-entity position="0 0.03 -25"><a-box width="0.15" height="0.01" depth="1.5" color="#eeee88"></a-box></a-entity>
+  <a-entity position="0 0.03 -20"><a-box width="0.15" height="0.01" depth="1.5" color="#eeee88"></a-box></a-entity>
+  <a-entity position="0 0.03 -15"><a-box width="0.15" height="0.01" depth="1.5" color="#eeee88"></a-box></a-entity>
+  <a-entity position="0 0.03 -10"><a-box width="0.15" height="0.01" depth="1.5" color="#eeee88"></a-box></a-entity>
+  <a-entity position="0 0.03  10"><a-box width="0.15" height="0.01" depth="1.5" color="#eeee88"></a-box></a-entity>
+  <a-entity position="0 0.03  15"><a-box width="0.15" height="0.01" depth="1.5" color="#eeee88"></a-box></a-entity>
+  <a-entity position="0 0.03  20"><a-box width="0.15" height="0.01" depth="1.5" color="#eeee88"></a-box></a-entity>
+  <a-entity position="0 0.03  25"><a-box width="0.15" height="0.01" depth="1.5" color="#eeee88"></a-box></a-entity>
+  <!-- EW dashes -->
+  <a-entity position="-25 0.03 0"><a-box width="1.5" height="0.01" depth="0.15" color="#eeee88"></a-box></a-entity>
+  <a-entity position="-20 0.03 0"><a-box width="1.5" height="0.01" depth="0.15" color="#eeee88"></a-box></a-entity>
+  <a-entity position="-15 0.03 0"><a-box width="1.5" height="0.01" depth="0.15" color="#eeee88"></a-box></a-entity>
+  <a-entity position="-10 0.03 0"><a-box width="1.5" height="0.01" depth="0.15" color="#eeee88"></a-box></a-entity>
+  <a-entity position=" 10 0.03 0"><a-box width="1.5" height="0.01" depth="0.15" color="#eeee88"></a-box></a-entity>
+  <a-entity position=" 15 0.03 0"><a-box width="1.5" height="0.01" depth="0.15" color="#eeee88"></a-box></a-entity>
+  <a-entity position=" 20 0.03 0"><a-box width="1.5" height="0.01" depth="0.15" color="#eeee88"></a-box></a-entity>
+  <a-entity position=" 25 0.03 0"><a-box width="1.5" height="0.01" depth="0.15" color="#eeee88"></a-box></a-entity>
+
+  <!-- ── Sidewalks ─────────────────────────────────────────────── -->
+  <!-- NS west -->
+  <a-plane rotation="-90 0 0" width="2.5" height="70" position="-5.75 0.015 0" color="#aaa090"></a-plane>
+  <!-- NS east -->
+  <a-plane rotation="-90 0 0" width="2.5" height="70" position=" 5.75 0.015 0" color="#aaa090"></a-plane>
+  <!-- EW north -->
+  <a-plane rotation="-90 0 0" width="70" height="2.5" position="0 0.015 -5.75" color="#aaa090"></a-plane>
+  <!-- EW south -->
+  <a-plane rotation="-90 0 0" width="70" height="2.5" position="0 0.015  5.75" color="#aaa090"></a-plane>
+
+  <!-- ── Corner buildings ──────────────────────────────────────── -->
+  <a-entity gltf-model="#house-glb" position="-18 0 -18" rotation="0  45 0" scale="0.75 0.75 0.75" shadow="cast:true;receive:true"></a-entity>
+  <a-entity gltf-model="#house-glb" position=" 18 0 -18" rotation="0 -45 0" scale="0.75 0.75 0.75" shadow="cast:true;receive:true"></a-entity>
+  <a-entity gltf-model="#mixed-glb" position="-18 0  18" rotation="0 135 0" scale="0.4  0.4  0.4 " shadow="cast:true;receive:true"></a-entity>
+  <a-entity gltf-model="#mixed-glb" position=" 18 0  18" rotation="0 -135 0" scale="0.4 0.4  0.4 " shadow="cast:true;receive:true"></a-entity>
+
+  <!-- ── City Simulation Orchestrator ─────────────────────────── -->
+  <!--
+    city-simulation spawns citizenCount pedestrians + policeCount police cars.
+    Attach it to any entity; all spawned entities are appended to <a-scene>.
+  -->
+  <a-entity id="sim"
+    city-simulation="citizenCount:15; policeCount:3; crimeRate:0.003; citizenSpeed:1.5; policeSpeed:8">
+  </a-entity>
+
+  <!-- ── Isometric camera ──────────────────────────────────────── -->
+  <a-entity id="cam-pivot" position="0 0 0">
+    <a-camera id="main-cam"
+      position="0 44 32"
+      rotation="-54 0 0"
+      look-controls="enabled:false"
+      wasd-controls="enabled:false"
+      far="600">
+    </a-camera>
+  </a-entity>
+
+</a-scene>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     SIMULATION CONTROLS & HUD WIRING
+═══════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ── HUD update ───────────────────────────────────────────────────────────────
+const logEl   = document.getElementById('crime-log');
+let logSeeded = false;
+
+window.addEventListener('city-stats', ({ detail }) => {
+  document.getElementById('s-total').textContent    = detail.total;
+  document.getElementById('s-resolved').textContent = detail.resolved;
+  document.getElementById('s-pending').textContent  = detail.pending;
+  document.getElementById('s-response').textContent =
+    detail.avgResponseMs ? detail.avgResponseMs + ' ms' : '—';
+  document.getElementById('s-police').textContent   = detail.policeCount;
+
+  // Update log on new crime
+  if (detail.total > 0 && !logSeeded) {
+    logEl.innerHTML = '';
+    logSeeded = true;
+  }
+});
+
+// Listen for crime events emitted by city-simulation VFX spawner
+document.querySelector('#main-scene').addEventListener('city-crime', ({ detail }) => {
+  const now = new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  div.className = 'entry crime';
+  div.textContent = `[${now}] 🔫 Homicide at (${detail.x.toFixed(1)}, ${detail.z.toFixed(1)})`;
+  logEl.prepend(div);
+  if (logEl.children.length > 12) logEl.lastChild.remove();
+});
+
+// ── Pause / Resume ───────────────────────────────────────────────────────────
+let paused = false;
+document.getElementById('btn-pause').addEventListener('click', () => {
+  paused = !paused;
+  const sim = document.getElementById('sim');
+  sim.setAttribute('city-simulation', 'paused', paused);
+  document.getElementById('btn-pause').textContent = paused ? '▶ Resume' : '⏸ Pause';
+});
+
+// ── Force crime (debug) ──────────────────────────────────────────────────────
+document.getElementById('btn-crime').addEventListener('click', () => {
+  const sim = document.getElementById('sim');
+  const comp = sim && sim.components['city-simulation'];
+  if (!comp) return;
+  // Pick a random wandering citizen and trigger crime
+  const wanderers = comp.citizens.filter(c => c.state === 'wandering');
+  if (wanderers.length > 1) {
+    comp.attemptCrime(wanderers[Math.floor(Math.random() * wanderers.length)]);
+  }
+});
+
+// ── Crime rate slider ─────────────────────────────────────────────────────────
+document.getElementById('sl-crime').addEventListener('input', (e) => {
+  const val = parseFloat(e.target.value);
+  document.getElementById('sl-crime-val').textContent = val.toFixed(3);
+  const sim = document.getElementById('sim');
+  if (!sim) return;
+  // Update each citizen-agent's crimeRate live
+  const comp = sim.components['city-simulation'];
+  if (comp) comp.citizens.forEach(c => { c.data.crimeRate = val; });
+});
+
+// ── Police speed slider ───────────────────────────────────────────────────────
+document.getElementById('sl-speed').addEventListener('input', (e) => {
+  const val = parseInt(e.target.value);
+  document.getElementById('sl-speed-val').textContent = val;
+  const sim = document.getElementById('sim');
+  if (!sim) return;
+  const comp = sim.components['city-simulation'];
+  if (comp) comp.police.forEach(p => { p.data.speed = val; });
+});
+
+// ── Isometric camera pan (WASD / arrows) ─────────────────────────────────────
+(function () {
+  const SPEED = 0.4;
+  const keys  = {};
+  document.addEventListener('keydown', e => { keys[e.code] = true;  });
+  document.addEventListener('keyup',   e => { keys[e.code] = false; });
+
+  function tick() {
+    const pivot = document.getElementById('cam-pivot');
+    if (pivot) {
+      const p = pivot.object3D.position;
+      if (keys['KeyW'] || keys['ArrowUp'])    p.z -= SPEED;
+      if (keys['KeyS'] || keys['ArrowDown'])  p.z += SPEED;
+      if (keys['KeyA'] || keys['ArrowLeft'])  p.x -= SPEED;
+      if (keys['KeyD'] || keys['ArrowRight']) p.x += SPEED;
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+
+</body>
+</html>

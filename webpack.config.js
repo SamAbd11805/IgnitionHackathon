@@ -25,6 +25,7 @@ module.exports = {
   devtool: 'source-map',
   entry: {
     core: { import: './src/index.js', filename: 'aframe-street-component.js' },
+    crimesim: { import: './src/crime-sim.js', filename: 'crime-sim.js' },
     generator: {
       import: './src/generator/index.js',
       filename: 'generator.js'
