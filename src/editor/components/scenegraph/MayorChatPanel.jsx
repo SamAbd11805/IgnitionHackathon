@@ -390,7 +390,7 @@ export default function MayorChatPanel() {
           🏛 AI Mayor
         </div>
         <div style={{ fontSize: 11, color: '#556', marginTop: 3 }}>
-          Powered by claude-opus-4-7 — observes & controls the simulation
+          Powered by llama-3.3-70b on Groq — observes & controls the simulation
         </div>
       </div>
 
