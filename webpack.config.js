@@ -26,6 +26,7 @@ module.exports = {
   entry: {
     core: { import: './src/index.js', filename: 'aframe-street-component.js' },
     crimesim: { import: './src/crime-sim.js', filename: 'crime-sim.js' },
+    demo: { import: './src/demo/index.jsx', filename: 'demo.js' },
     generator: {
       import: './src/generator/index.js',
       filename: 'generator.js'

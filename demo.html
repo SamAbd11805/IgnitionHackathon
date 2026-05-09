@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>City Crime — Demo</title>
+
+  <!-- A-Frame master commit (matches index.html for Three r181 compat) -->
+  <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe@6a054e85953bbcc71854bcd64f9abde0897be649/dist/aframe-master.min.js"></script>
+  <!-- crime-sim.js = street components + simulation, NO editor -->
+  <script src="/dist/crime-sim.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: #050810;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      color: #c8deff;
+    }
+    a-scene { position: fixed !important; inset: 0; }
+    /* React UI layer — sits on top of the canvas; only its children take pointer events. */
+    #demo-root { position: fixed; inset: 0; z-index: 100; pointer-events: none; }
+    #demo-root > * { pointer-events: auto; }
+    /* Hide A-Frame's built-in chrome */
+    .a-enter-vr, .a-enter-ar, .a-orientation-modal { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- Empty A-Frame scene; city-simulation injects sky/ground/lights/buildings on demand. -->
+  <!-- Renderer settings mirror the editor (index.html) so OSM cities render
+       the same way. logarithmicDepthBuffer is critical for the 800m-wide OSM
+       scene — without it the roads/sidewalks/ground z-fight at distance. -->
+  <a-scene
+    renderer="colorManagement: true; physicallyCorrectLights: true; anisotropy: 16; logarithmicDepthBuffer: true; antialias: true"
+    vr-mode-ui="enabled:false"
+  >
+    <a-entity id="cam-pivot" position="0 0 0">
+      <a-camera
+        id="main-cam"
+        position="0 320 240"
+        rotation="-55 0 0"
+        look-controls="enabled:false"
+        wasd-controls="enabled:false"
+        far="3000"
+      ></a-camera>
+    </a-entity>
+  </a-scene>
+
+  <!-- React mount point for the demo UI (city picker, HUD, Mayor, controls). -->
+  <div id="demo-root"></div>
+
+  <script>
+    // Orbit camera: left-drag rotates around the pivot, right-drag pans,
+    // scroll wheel zooms, WASD also pans (kept for keyboard-only nav).
+    (function () {
+      var PAN_SPEED = 1.5;
+      var ROT_SPEED = 0.005;
+      var DRAG_PAN_SPEED = 0.6;
+      var ZOOM_SPEED = 0.5;
+      var MIN_PITCH = -Math.PI / 2 + 0.05; // ~ -85°
+      var MAX_PITCH = -0.05;                // ~  -3° (don't roll past horizontal)
+
+      var keys = {};
+      document.addEventListener('keydown', function (e) { keys[e.code] = true; });
+      document.addEventListener('keyup',   function (e) { keys[e.code] = false; });
+
+      // Right-click context menu would block right-drag pan.
+      window.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+      var dragBtn = -1;
+      var lastX = 0, lastY = 0;
+      window.addEventListener('mousedown', function (e) {
+        if (e.button !== 0 && e.button !== 2) return;
+        // Don't hijack drags that start on UI (Mayor input, buttons, etc.)
+        if (e.target && e.target.closest && e.target.closest('#demo-root')) return;
+        // Camera-follow mode: drags would fight the auto-snap, so disable them.
+        if (window.__demoFollowing) return;
+        dragBtn = e.button;
+        lastX = e.clientX;
+        lastY = e.clientY;
+      });
+      window.addEventListener('mouseup', function () { dragBtn = -1; });
+      window.addEventListener('mouseleave', function () { dragBtn = -1; });
+
+      window.addEventListener('mousemove', function (e) {
+        if (dragBtn === -1) return;
+        var dx = e.clientX - lastX;
+        var dy = e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+
+        var pivot = document.getElementById('cam-pivot');
+        var cam = document.getElementById('main-cam');
+        if (!pivot || !cam) return;
+
+        if (dragBtn === 0) {
+          // Left drag = orbit around the pivot
+          pivot.object3D.rotation.y -= dx * ROT_SPEED;
+          var newPitch = cam.object3D.rotation.x - dy * ROT_SPEED;
+          if (newPitch < MIN_PITCH) newPitch = MIN_PITCH;
+          if (newPitch > MAX_PITCH) newPitch = MAX_PITCH;
+          cam.object3D.rotation.x = newPitch;
+        } else if (dragBtn === 2) {
+          // Right drag = pan in the pivot's local XZ plane
+          // Rotate the screen-space drag vector by the pivot's yaw so panning
+          // feels natural regardless of which way the camera is facing.
+          var yaw = pivot.object3D.rotation.y;
+          var cos = Math.cos(yaw), sin = Math.sin(yaw);
+          var px = -dx * DRAG_PAN_SPEED;
+          var pz = -dy * DRAG_PAN_SPEED;
+          pivot.object3D.position.x += px * cos - pz * sin;
+          pivot.object3D.position.z += px * sin + pz * cos;
+        }
+      });
+
+      function tick() {
+        var pivot = document.getElementById('cam-pivot');
+        if (pivot) {
+          var p = pivot.object3D.position;
+          var yaw = pivot.object3D.rotation.y;
+          var cos = Math.cos(yaw), sin = Math.sin(yaw);
+          var fx = 0, fz = 0;
+          if (keys['KeyW'] || keys['ArrowUp'])    fz -= PAN_SPEED;
+          if (keys['KeyS'] || keys['ArrowDown'])  fz += PAN_SPEED;
+          if (keys['KeyA'] || keys['ArrowLeft'])  fx -= PAN_SPEED;
+          if (keys['KeyD'] || keys['ArrowRight']) fx += PAN_SPEED;
+          if (fx !== 0 || fz !== 0) {
+            p.x += fx * cos - fz * sin;
+            p.z += fx * sin + fz * cos;
+          }
+        }
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+
+      // Wheel = dolly the camera along its forward axis.
+      window.addEventListener('wheel', function (e) {
+        if (e.target && e.target.closest && e.target.closest('#demo-root')) return;
+        var cam = document.getElementById('main-cam');
+        if (!cam || !cam.object3D) return;
+        var dir = new THREE.Vector3();
+        cam.object3D.getWorldDirection(dir);
+        cam.object3D.position.addScaledVector(dir, -e.deltaY * ZOOM_SPEED);
+      }, { passive: true });
+    })();
+  </script>
+
+  <!-- Demo React app (built by webpack, see entry "demo" in webpack.config.js). -->
+  <script src="/dist/demo.js"></script>
+</body>
+</html>

@@ -1757,7 +1757,7 @@ AFRAME.registerComponent('city-simulation', {
       const el = document.createElement('a-entity');
       el.classList.add(SPAWN_CLASS);
       el.setAttribute('mixin', this._CHAR_MIXINS[i % this._CHAR_MIXINS.length]);
-      el.setAttribute('scale', '0.85 0.85 0.85');
+      el.setAttribute('scale', '1 1 1');
       el.setAttribute('citizen-agent', {
         speed: this.data.citizenSpeed + rand(-0.3, 0.3),
         crimeRate: this.data.crimeRate
@@ -1797,7 +1797,7 @@ AFRAME.registerComponent('city-simulation', {
       const el = document.createElement('a-entity');
       el.classList.add(SPAWN_CLASS);
       el.setAttribute('mixin', 'sedan-rig');
-      el.setAttribute('scale', '0.5 0.5 0.5');
+      el.setAttribute('scale', '1 1 1');
       el.setAttribute('police-agent', {
         speed: this.data.policeSpeed,
         routeIndex: i % Math.max(1, this.routes.length)
@@ -2027,11 +2027,13 @@ AFRAME.registerComponent('city-simulation', {
       return;
     }
     this.pendingCrimes = this.pendingCrimes.filter((crime) => {
-      // Detection range: police on road, crime on sidewalk → ~25m gives the
-      // police "line of sight" without forcing them off the road.
+      // A crime is resolved when the cop dispatched FOR THAT crime arrives
+      // at-scene. Reference match (not distance) — the crime point can be
+      // 30-50m off the nearest drivable road for sidewalk-spawned crimes,
+      // so a fixed 25m radius would leave them stuck pending forever even
+      // though the cop did its job.
       const resolved = this.police.some(
-        (p) =>
-          p.state === PS.AT_SCENE && dist2D(p.el.object3D.position, crime) < 25
+        (p) => p.state === PS.AT_SCENE && p.crimeScene === crime
       );
       if (resolved) {
         this.stats.resolved++;
